@@ -24,7 +24,9 @@ docker:
 	@echo 'Docker image $(IMAGE):$(TAG) can now be used.'
 
 debug: docker
+	kubectl proxy --accept-hosts .* &
 	docker run --rm -it -e CLUSTERS=http://docker.for.mac.localhost:8001 --user=$(id -u) -v $(shell pwd)/output:/output $(IMAGE):$(TAG) /output
+	pkill -9 -f "kubectl proxy"
 	open output/index.html
 
 push: docker
