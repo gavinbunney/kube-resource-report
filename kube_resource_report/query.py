@@ -141,7 +141,7 @@ def pod_active(pod):
     return False
 
 
-def map_node(_node: Node):
+def map_node(_node: Node, additional_cost_per_node=0.00):
     """Map a Kubernetes Node object to our internal structure."""
 
     node: Dict[str, Any] = {}
@@ -151,6 +151,8 @@ def map_node(_node: Node):
     node["usage"] = new_resources()
     node["pods"] = {}
     node["slack_cost"] = 0
+    node["cost_per_cpu"] = 0
+    node["cost_per_memory"] = 0
 
     status = _node.obj["status"]
     for k, v in status.get("capacity", {}).items():
@@ -179,6 +181,16 @@ def map_node(_node: Node):
         cpu=node["capacity"].get("cpu"),
         memory=node["capacity"].get("memory"),
     )
+    node["cost"] += additional_cost_per_node
+    if "allocatable" in node.keys():
+        node_allocatable = node["allocatable"]
+        node_allocatable_cpu = node_allocatable.get("cpu", 0.0)
+        node_allocatable_memory = node_allocatable.get("memory", 0.0)
+        if node_allocatable_cpu > 0.0:
+            node["cost_per_cpu"] = node["cost"] / node_allocatable_cpu
+        if node_allocatable_memory > 0.0:
+            node["cost_per_memory"] = node["cost"] / node_allocatable_memory
+
     return node
 
 
@@ -208,6 +220,8 @@ def map_pod(pod: Pod, cost_per_cpu: float, cost_per_memory: float):
         "container_names": container_names,
         "container_images": container_images,
         "cost": cost,
+        "cost_per_cpu": cost_per_cpu,
+        "cost_per_memory": cost_per_memory,
         "usage": new_resources(),
         "team": team,
     }
@@ -242,10 +256,16 @@ def query_cluster(
     cluster_allocatable: Dict[str, float] = collections.defaultdict(float)
     cluster_requests: Dict[str, float] = collections.defaultdict(float)
     user_requests: Dict[str, float] = collections.defaultdict(float)
-    cluster_cost = additional_cost_per_cluster
+    cluster_cost = 0.00
+
+    # amortize the additional cluster costs across all nodes evenly
+    # this ensure that we consider the other cluster costs when using node-level pricing per cpu/memory
+    additional_cost_per_node = additional_cost_per_cluster / len(
+        Node.objects(cluster.client)
+    )
 
     for _node in Node.objects(cluster.client):
-        node = map_node(_node)
+        node = map_node(_node, additional_cost_per_node)
         if map_node_hook:
             map_node_hook(_node, node)
         nodes[_node.name] = node
@@ -271,14 +291,22 @@ def query_cluster(
         logger.warning(f"Failed to query VPAs in cluster {cluster.id}: {e}")
         vpas_by_namespace_label = collections.defaultdict(list)
 
-    cost_per_cpu = cluster_cost / cluster_allocatable["cpu"]
-    cost_per_memory = cluster_cost / cluster_allocatable["memory"]
+    cluster_cost_per_cpu = cluster_cost / cluster_allocatable["cpu"]
+    cluster_cost_per_memory = cluster_cost / cluster_allocatable["memory"]
 
     for pod in Pod.objects(cluster.client, namespace=pykube.all):
         # ignore unschedulable/completed pods
         if not pod_active(pod):
             continue
-        pod_ = map_pod(pod, cost_per_cpu, cost_per_memory)
+        node_name = pod.obj["spec"].get("nodeName")
+        pod_cost_per_cpu = cluster_cost_per_cpu
+        pod_cost_per_memory = cluster_cost_per_memory
+        # if node_name and node_name in nodes:
+        #     if nodes[node_name]["cost_per_cpu"] > 0.0:
+        #         pod_cost_per_cpu = nodes[node_name]["cost_per_cpu"]
+        #     if nodes[node_name]["cost_per_memory"] > 0.0:
+        #         pod_cost_per_memory = nodes[node_name]["cost_per_memory"]
+        pod_ = map_pod(pod, pod_cost_per_cpu, pod_cost_per_memory)
         if map_pod_hook:
             map_pod_hook(pod, pod_)
         for k, v in pod_["requests"].items():
@@ -363,8 +391,8 @@ def query_cluster(
     cluster_slack_cost = 0
     for pod in pods.values():
         usage_cost = max(
-            pod["recommendation"]["cpu"] * cost_per_cpu,
-            pod["recommendation"]["memory"] * cost_per_memory,
+            pod["recommendation"]["cpu"] * pod["cost_per_cpu"],
+            pod["recommendation"]["memory"] * pod["cost_per_memory"],
         )
         pod["slack_cost"] = max(min(pod["cost"] - usage_cost, pod["cost"]), 0)
         if "node" in pod.keys():

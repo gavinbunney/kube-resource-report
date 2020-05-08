@@ -13,6 +13,8 @@ def test_map_empty_node():
         "usage": {"cpu": 0, "memory": 0},
         "requests": {"cpu": 0, "memory": 0},
         "cost": 0,
+        "cost_per_cpu": 0,
+        "cost_per_memory": 0,
         "slack_cost": 0,
         "instance_type": "unknown",
         "kubelet_version": "",
@@ -41,6 +43,8 @@ def test_map_gke_preemptible_node():
         "usage": {"cpu": 0, "memory": 0},
         "requests": {"cpu": 0, "memory": 0},
         "cost": 0,
+        "cost_per_cpu": 0,
+        "cost_per_memory": 0,
         "slack_cost": 0,
         "instance_type": "1-standard-2-preemptible",
         "kubelet_version": "",
@@ -61,6 +65,8 @@ def test_map_empty_pod():
         "requests": {"cpu": 0, "memory": 0},
         "usage": {"cpu": 0, "memory": 0},
         "cost": 0,
+        "cost_per_cpu": 0,
+        "cost_per_memory": 0,
     }
 
 
@@ -92,4 +98,6 @@ def test_map_pod_with_resources():
         "requests": {"cpu": 0.005, "memory": 200 * 1024 * 1024},
         "usage": {"cpu": 0, "memory": 0},
         "cost": 0,
+        "cost_per_cpu": 0,
+        "cost_per_memory": 0,
     }
