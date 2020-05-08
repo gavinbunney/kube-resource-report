@@ -23,6 +23,10 @@ docker:
 	docker build --build-arg "VERSION=$(VERSION)" -t "$(IMAGE):$(TAG)" .
 	@echo 'Docker image $(IMAGE):$(TAG) can now be used.'
 
+debug: docker
+	docker run --rm -it -e CLUSTERS=http://docker.for.mac.localhost:8001 --user=$(id -u) -v $(shell pwd)/output:/output $(IMAGE):$(TAG) /output
+	open output/index.html
+
 push: docker
 	docker push "$(IMAGE):$(TAG)"
 	docker tag "$(IMAGE):$(TAG)" "$(IMAGE):latest"
