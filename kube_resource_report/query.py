@@ -301,11 +301,11 @@ def query_cluster(
         node_name = pod.obj["spec"].get("nodeName")
         pod_cost_per_cpu = cluster_cost_per_cpu
         pod_cost_per_memory = cluster_cost_per_memory
-        # if node_name and node_name in nodes:
-        #     if nodes[node_name]["cost_per_cpu"] > 0.0:
-        #         pod_cost_per_cpu = nodes[node_name]["cost_per_cpu"]
-        #     if nodes[node_name]["cost_per_memory"] > 0.0:
-        #         pod_cost_per_memory = nodes[node_name]["cost_per_memory"]
+        if node_name and node_name in nodes:
+            if nodes[node_name]["cost_per_cpu"] > 0.0:
+                pod_cost_per_cpu = nodes[node_name]["cost_per_cpu"]
+            if nodes[node_name]["cost_per_memory"] > 0.0:
+                pod_cost_per_memory = nodes[node_name]["cost_per_memory"]
         pod_ = map_pod(pod, pod_cost_per_cpu, pod_cost_per_memory)
         if map_pod_hook:
             map_pod_hook(pod, pod_)
